@@ -1,45 +1,111 @@
 import numpy as np
+from bayes_opt import BayesianOptimization
 from scipy.optimize import linprog
 from helpers import *
 
-def optimize_linear_contributions(children, c_func, constraint_func=None, constraint_value=None, budget=1):
-    """
-    Solves the linear optimization problem with an interchangeable objective function.
+# def optimize_linear_contributions(children, c_func, constraint_func=None, constraint_value=None, budget=1):
+#     """
+#     Solves the linear optimizer for each layer
+#     """
+#     num_units = len(children)
+
+#     # Weighted array for 
+#     c = -np.array([c_func(x) for x in children])  
+#     # print(c)
+
+#     A_eq = [np.ones(num_units)]
+#     b_eq = [budget]
+
+
+#     A_ub, b_ub = None, None
+#     if constraint_func and constraint_value is not None:
+#         A_ub = [[-constraint_func(x) for x in children]]  # Ensure target2 stays above the threshold
+#         b_ub = [-constraint_value]
+
+#     bounds = [(x.min_contribution, x.max_contribution) for x in children]
+#     result = linprog(c, A_eq=A_eq, b_eq=b_eq, A_ub=A_ub, b_ub=b_ub, bounds=bounds, method="highs")
+
+#     if result.success:
+#         return result.x
+#     else:
+#         print("⚠️ Linear optimization failed! Attempting fallback...")
+#         print("Failure Reason:", result.message)
+#         return [x.min_contribution for x in children]
     
+
+# bayesian 
+def target_function(children, alpha=0.5, beta=0.5, **kwargs):
+    """
+    Objective function for Bayesian optimization.
+
     Parameters:
-    - children: List of objects, each with attributes like `target1`, `target2`, etc.
-    - c_func: Function to define the objective coefficients for optimization (e.g., lambda x: x.target1)
-    - constraint_func: Function to define an additional constraint (e.g., lambda x: x.target2)
-    - constraint_value: The constraint threshold (e.g., ensure total target2 score is at least X)
-    - budget: Total budget to distribute across units (default = 1)
+    - children: List of child units (each with revenue, margin, etc.)
+    - alpha: Weight for revenue maximization
+    - beta: Weight for margin maximization
+    - kwargs: Contributions suggested by optimizer
 
     Returns:
-    - List of optimized contributions for each unit
+    - Objective value with penalties for constraint violations
     """
+
+    # Extract contributions from optimizer's suggested values
+    contributions = np.array([kwargs[f'c{i}'] for i in range(len(children))])
+
+
+    sum_constraint_penalty = 0
+    if not np.isclose(sum(contributions), 1.0):
+        sum_constraint_penalty = -100000 * abs(sum(contributions) - 1)
+
+    objective_value = sum(
+        contrib * child.revenue
+        for contrib, child in zip(contributions, children)
+    )
+
+    if np.any(contributions < 0) or np.any(contributions > 1): 
+        return -np.inf
+
+    return -(objective_value + sum_constraint_penalty) 
+
+def bayesian_optimize_contributions(children, n_iter=50, alpha=0.5, beta=0.5):
+    """
+    Uses Bayesian Optimization to find the best contribution allocations.
+
+    Parameters:
+    - children: List of units with attributes like `revenue`, `margin`, `contribution`
+    - n_iter: Number of iterations for Bayesian optimization
+    - alpha: Weight for revenue
+    - beta: Weight for margin
+
+    Returns:
+    - Optimal contributions for each unit
+    """
+    
     num_units = len(children)
 
-    # Weighted array for 
-    c = -np.array([c_func(x) for x in children])  
-    # print(c)
+    # Define parameter bounds for each unit's contribution
+    pbounds = {f'c{i}': (child.min_contribution, child.max_contribution) for i, child in enumerate(children)}
 
-    A_eq = [np.ones(num_units)]
-    b_eq = [budget]
+    # Initialize Bayesian Optimizer
+    optimizer = BayesianOptimization(
+        f=lambda **kwargs: target_function(children, alpha, beta, **kwargs),  # Fix: Defer function execution
+        pbounds=pbounds,  
+        random_state=42,
+        verbose=0
+    )
+
+    # Run Bayesian optimization
+    optimizer.maximize(init_points=5, n_iter=n_iter)
+
+    # Extract optimal contributions
+    best_contributions = optimizer.max["params"]
+    return [best_contributions[f'c{i}'] for i in range(num_units)]
 
 
-    A_ub, b_ub = None, None
-    if constraint_func and constraint_value is not None:
-        A_ub = [[-constraint_func(x) for x in children]]  # Ensure target2 stays above the threshold
-        b_ub = [-constraint_value]
 
-    bounds = [(x.Min_Contribution, x.Max_Contribution) for x in children]
-    result = linprog(c, A_eq=A_eq, b_eq=b_eq, A_ub=A_ub, b_ub=b_ub, bounds=bounds, method="highs")
 
-    if result.success:
-        return result.x
-    else:
-        raise ValueError("Linear optimization failed!")
 
-def bottom_up_optimizer(node, target_func, constraint_func=None, constraint_value=None):
+
+def bottom_up_optimizer(node, alpha, beta):
     """
     Recursively optimizes contribution percentages in a bottom-up manner.
     """
@@ -48,60 +114,33 @@ def bottom_up_optimizer(node, target_func, constraint_func=None, constraint_valu
 
     # Recursively optimize children first
     for child in node.sub_units:
-        bottom_up_optimizer(child, target_func, constraint_func, constraint_value)
+        bottom_up_optimizer(child, alpha, beta)
 
     # After children are optimized, optimize this level
     children = node.sub_units
-    results = optimize_linear_contributions(children, target_func, constraint_func, constraint_value)
+
+    # results = optimize_linear_contributions(children, target_func, constraint_func, constraint_value)
+    results = bayesian_optimize_contributions(children, alpha, beta)
     
     # update contributions
     for child, new_contribution in zip(children, results):
         # print(child.Contribution, new_contribution)
-        child.Contribution = new_contribution
+        child.contribution = new_contribution
 
     #propagate values up
-    update_vals(node)
+    node._update_values()
 
     return node
-
-    
-### Cost function 
-def update_vals(node):
-    ''' 
-    Function to aggregate one layer values for each sub-company to their respective parent 
-
-    '''
-    
-    children = getattr(node, 'sub_units', [])
-    
-    total_revenue = 0
-    total_weighted_margin = 0
-    volatilities = []
-
-    # Taking a weighted average for the level based on contribution ammounts
-    for child in children:
-        total_revenue += child.Revenue * child.Contribution
-        total_weighted_margin += child.Revenue * child.Contribution * child.Margin
-
-        if child.Volatility is not None and child.Volatility != 0:
-            volatilities.append(child.Volatility * child.Contribution)
-
-    avg_volatility = np.mean(volatilities) if volatilities else 0
-
-    node.Revenue = total_revenue
-    node.Volatility = avg_volatility
-    node.Weighted_Margin = total_weighted_margin
-
-
 
 
 def eval_optimizer(optimized_contributions):
     print("---------------- Contributions by each sub company ----------------")
     print_tree(optimized_contributions)
     results = {
-            'Revenue': optimized_contributions.Revenue,
-            'Volatility': optimized_contributions.Volatility,
-            'Weighted_Margin': optimized_contributions.Weighted_Margin
+            'Revenue': optimized_contributions.revenue,
+            'Volatility': optimized_contributions.volatility,
+            'Avg Margin': optimized_contributions.margin,
+            'Margin Dollars': optimized_contributions.margin_dollars
         }
 
 

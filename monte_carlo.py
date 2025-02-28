@@ -17,14 +17,13 @@ def monte_carlo_simulation(node, years=5):
     - results: Dictionary containing revenue statistics.
     """
     # Compute mean (µ) and standard deviation (σ) for the growth rate
-    mean_growth = (node.Min_Trend + node.Max_Trend) / 2
-    std_dev_growth = (node.Max_Trend - node.Min_Trend) / 4  # 95% confidence range
+    mean_growth = (node.min_trend + node.max_trend) / 2
+    std_dev_growth = (node.max_trend - node.min_trend) / 4  # 95% confidence range
 
     # Generate a single trajectory of growth rates
     growth_rates = np.random.normal(loc=mean_growth, scale=std_dev_growth, size=years)
     growth_rates = np.clip(growth_rates, node.Min_Trend, node.Max_Trend)
 
- 
     revenue_trajectory = np.zeros(years)
     revenue_trajectory[0] = node.Revenue  # Start with current revenue
 
@@ -50,8 +49,6 @@ def run_monte_carlo_layer_5(root, years=5, target_layer=5):
     Returns:
     - Dictionary mapping layer-5 sub-units to their simulation results.
     """
-    # Dictionary to store results
-    simulation_results = {}
 
     # Perform level-order traversal to track depth of nodes
     queue = deque([(root, 1)])  # Start from level 1
@@ -68,7 +65,7 @@ def run_monte_carlo_layer_5(root, years=5, target_layer=5):
             for child in node.sub_units:
                 queue.append((child, level + 1))
 
-    return simulation_results
+
 
 
 def run_strategy(root, years, n=20):
@@ -89,7 +86,6 @@ def run_strategy(root, years, n=20):
     for i in range(n):  # Fix loop syntax
         temp_root = root.copy()
         run_monte_carlo_layer_5(temp_root, years)
-        update_vals_recursive(temp_root)
         results = eval_monte(temp_root)
 
         weighted_margin.append(results['Weighted_Margin'])
