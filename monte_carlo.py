@@ -22,36 +22,56 @@ def monte_carlo_simulation(node, years=5):
 
     # Generate a single trajectory of growth rates
     growth_rates = np.random.normal(loc=mean_growth, scale=std_dev_growth, size=years)
-    growth_rates = np.clip(growth_rates, node.Min_Trend, node.Max_Trend)
 
-    revenue_trajectory = np.zeros(years)
-    revenue_trajectory[0] = node.Revenue  # Start with current revenue
+    growth_rates = np.clip(growth_rates, node.min_trend, node.max_trend)
+
+    revenue_trajectory = np.zeros(years+1)
+    revenue_trajectory[0] = node.revenue  
 
     # Simulate revenue using random walk
-    for t in range(1, years):
-        revenue_trajectory[t] = revenue_trajectory[t-1] * (1 + growth_rates[t])
+    for t in range(1, years+1):
+        revenue_trajectory[t] = revenue_trajectory[t-1] * (1 + growth_rates[t-1])
 
-    # Update node revenue based on the final year of simulation
-    node.Revenue = revenue_trajectory[-1]
-    node.Weighted_Margin = revenue_trajectory * node.Margin  
+    node.revenue = revenue_trajectory[-1]
 
 
-def run_monte_carlo_layer_5(root, years=5, target_layer=5):
-    """
-    Randomizes the revenue based on the trends for all of the sub categories
+def update_all(node):
+    children = node.sub_units
     
-    Parameters:
-    - root: The root node of the tree.
-    - years: Number of years to simulate.
-    - num_simulations: Number of Monte Carlo iterations.
-    - target_layer: The specific layer to run simulations on (default = 5).
+    if not node.sub_units:  
+        return node
+
+    # Recursively optimize children first
+    for child in node.sub_units:
+        update_all(child)
     
-    Returns:
-    - Dictionary mapping layer-5 sub-units to their simulation results.
+    total_revenue = 0
+    total_margin = 0
+    volatilities = 0
+
+    # Taking a weighted average for the level based on contribution ammounts
+    for child in children:
+        total_revenue += child.contribution  * child.revenue
+        total_margin +=  child.contribution * child.margin
+
+        if child.volatility is not None and child.volatility != 0:
+            volatilities += child.contribution * child.volatility
+
+    node.revenue = total_revenue
+    node.volatility = volatilities
+    node.margin = total_margin
+    node.margin_dollars = node.revenue * node.margin
+
+    return node
+
+
+def run_monte_carlo_layer_5(strategy, years=5, target_layer=5):
+    """
+    Randomizes the revenue based on the segment level
+
     """
 
-    # Perform level-order traversal to track depth of nodes
-    queue = deque([(root, 1)])  # Start from level 1
+    queue = deque([(strategy, 0)])  
 
     while queue:
         node, level = queue.popleft()
@@ -64,11 +84,15 @@ def run_monte_carlo_layer_5(root, years=5, target_layer=5):
             # Continue traversal if below layer 5
             for child in node.sub_units:
                 queue.append((child, level + 1))
+    
 
+    # update values
+    update_all(strategy)
+    return strategy
 
+    
 
-
-def run_strategy(root, years, n=20):
+def run_strategy(strategy, years, n=100):
     """
     Runs Monte Carlo simulations for a given strategy.
 
@@ -80,20 +104,22 @@ def run_strategy(root, years, n=20):
     Returns:
     - A dictionary containing the results.
     """
-    weighted_margin = []
+    margin = []
     revenue = []
 
-    for i in range(n):  # Fix loop syntax
-        temp_root = root.copy()
-        run_monte_carlo_layer_5(temp_root, years)
-        results = eval_monte(temp_root)
+    for i in range(n): 
+        temp_root = strategy.copy()
 
-        weighted_margin.append(results['Weighted_Margin'])
+        # randomizes revenue based on trend data
+        random_walk = run_monte_carlo_layer_5(temp_root, years)
+        results = eval_optimizer(random_walk)
+
+        margin.append(results['Margin Dollars'])
         revenue.append(results['Revenue'])
 
     return {
         "revenue": revenue,
-        "weighted_margin": weighted_margin
+        "margin": margin
     }
 
 
@@ -112,27 +138,19 @@ def run_all_strategies(strategies, years):
 
     for strat_name, strat_root in strategies:
         
-        strategy = {'Name': strat_name,}
+        strategy = {'Name': strat_name}
         revenue = []
         margin = []
         for year in range(1, years+1):
             result = run_strategy(strat_root, year)
 
             revenue.append(result['revenue'])
-            margin.append(result['weighted_margin'])
+            margin.append(result['margin'])
 
         strategy['revenue'] = revenue
         strategy['margin'] = margin
         all_results.append(strategy)
 
+
     return all_results
 
-def eval_monte(optimized_contributions):
-    results = {
-            'Revenue': optimized_contributions.Revenue,
-            'Volatility': optimized_contributions.Volatility,
-            'Weighted_Margin': optimized_contributions.Weighted_Margin
-        }
-
-
-    return results

@@ -30,7 +30,7 @@ class Unit:
 
         self.sub_units: List["Unit"] = []  # Child units
         
-        self._update_values()
+        # self._update_values()
 
     @property
     def contribution(self) -> float:
@@ -64,6 +64,8 @@ class Unit:
         self.margin = total_margin
         self.margin_dollars = self.revenue * self.margin
 
+
+
     def add_sub_unit(self, sub_unit: "Unit"):
         """Adds a sub-unit to this unit."""
         self.sub_units.append(sub_unit)
@@ -79,15 +81,22 @@ class Unit:
         return self.revenue or 0  # Ensure the function always returns a valid value
 
     def copy(self) -> "Unit":
-        """Creates a deep copy of the unit and its sub-units."""
-        new_unit = Unit(
-            name=self.name,
-            revenue=self.revenue,
-            margin=self.margin,
-            min_trend=self.min_trend,
-            max_trend=self.max_trend,
-            min_contribution=self.min_contribution,
-            max_contribution=self.max_contribution
-        )
+        """Creates a deep copy of the unit and its sub-units without recalculating values."""
+        new_unit = Unit.__new__(Unit)
+    
+        # Manually copy over attributes
+        new_unit.name = self.name
+        new_unit.revenue = self.revenue
+        new_unit.margin = self.margin
+        new_unit.min_trend = self.min_trend
+        new_unit.max_trend = self.max_trend
+        new_unit.max_contribution = self.max_contribution
+        new_unit.min_contribution = self.min_contribution
+        new_unit._contribution = self._contribution  # copy the internal contribution value
+        new_unit.margin_dollars = self.margin_dollars
+        new_unit.volatility = self.volatility
+        
+        # Deep copy of sub-units
         new_unit.sub_units = [child.copy() for child in self.sub_units]
+        
         return new_unit

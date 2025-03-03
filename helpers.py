@@ -112,7 +112,9 @@ def build_df(root):
     """
     rows = []
     
-    def traverse(node, level):
+    queue = deque([(root, 0)])
+    while queue:
+        node, level = queue.popleft()
         # Create a row for the current node, using getattr with defaults.
         row = {
             'Level': level,
@@ -126,21 +128,18 @@ def build_df(root):
             'Max_Trend': getattr(node, 'max_trend', None),
         }
 
+        
 
         rows.append(row)
         # Recursively traverse children if they exist
         for child in getattr(node, 'sub_units', []):
-            traverse(child, level + 1)
-    
-    traverse(root, 0)
+          queue.append((child, level+1))  
+          
     df = pd.DataFrame(rows)
     return df
 
 
 def print_tree(root):
     df = build_df(root)
-    sorted_df = df.sort_values(by='Level')
-
     with pd.option_context('display.max_rows', None):
-      print(sorted_df.to_string(index=False))
-    
+      print(df.to_string(index=False))
