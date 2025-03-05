@@ -62,4 +62,5 @@ default_rc = {
 }
 
 def apply_plot_settings():
+    plt.rcParams["text.usetex"] = True
     plt.rcParams.update(default_rc)

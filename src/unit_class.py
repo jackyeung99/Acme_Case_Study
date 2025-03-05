@@ -14,7 +14,7 @@ class Unit:
         
         # Contribution Bounds
         self.max_contribution = max(min(max_contribution, 1.0), 0.0) if max_contribution is not None else 1.0
-        self.min_contribution = max(min(min_contribution or 0.0, self.max_contribution), 0.0)
+        self.min_contribution = max(min(min_contribution, self.max_contribution), 0.0)
         
         self.contribution = (max_contribution + min_contribution) /2
         

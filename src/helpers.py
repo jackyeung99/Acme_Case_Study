@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from collections import deque
+from data.hierarchy import Acme
 
 def build_tree_recursion(hierarchy_dict):
     """
@@ -30,11 +31,12 @@ def build_tree_recursion(hierarchy_dict):
     return current_unit
 
 
-def build_tree(hierarchy_dict):
-    root = build_tree_recursion(hierarchy_dict)
+def build_tree():
+    root = build_tree_recursion(Acme)
     # transformations to make this usable
     propagate_trends_down(root)
     normalize_contributions(root)
+    update_all(root)
     return root
 
 def propagate_trends_down(node):
@@ -94,6 +96,34 @@ def normalize_contributions(root, budget=1):
         # Add children to queue for next level processing
         queue.extend(children)
 
+def update_all(node):
+    children = node.sub_units
+    
+    if not node.sub_units:  
+        return node
+
+    # Recursively optimize children first
+    for child in node.sub_units:
+        update_all(child)
+    
+    total_revenue = 0
+    total_margin = 0
+    volatilities = 0
+
+    # Taking a weighted average for the level based on contribution ammounts
+    for child in children:
+        total_revenue += child.contribution  * child.revenue
+        total_margin +=  child.contribution * child.margin
+
+        if child.volatility is not None and child.volatility != 0:
+            volatilities += child.contribution * child.volatility
+
+    node.revenue = total_revenue
+    node.volatility = volatilities
+    node.margin = total_margin
+    node.margin_dollars = node.revenue * node.margin
+
+    return node
 
 
 def build_df(root):
