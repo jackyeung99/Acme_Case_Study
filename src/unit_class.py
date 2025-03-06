@@ -1,4 +1,7 @@
 from typing import List, Optional
+import numpy as np
+import pandas as pd
+from collections import deque
 
 class Unit:
     def __init__(self, 
@@ -16,21 +19,27 @@ class Unit:
         self.max_contribution = max(min(max_contribution, 1.0), 0.0) if max_contribution is not None else 1.0
         self.min_contribution = max(min(min_contribution, self.max_contribution), 0.0)
         
-        self.contribution = (max_contribution + min_contribution) /2
+        self._contribution = (self.max_contribution + self.min_contribution) / 2
         
         self.revenue = revenue
         self.margin = margin 
 
-        # values dependent on contribution
+        # Values dependent on contribution
         self.margin_dollars = None
         self.volatility = None
 
         self.min_trend = min_trend or 0.0
         self.max_trend = max_trend or 0.0
 
-        self.sub_units: List["Unit"] = []  # Child units
+        self.sub_units: List["Unit"] = [] 
+    
+    def update_parameters(self, parameters):
+
+        if 'max_trend' in parameters:
+            self.max_trend = parameters['max_trend']
+        if 'min_trend' in parameters:
+            self.min_trend = parameters['min_trend']
         
-        # self._update_values()
 
     @property
     def contribution(self) -> float:
@@ -41,31 +50,6 @@ class Unit:
         """Ensures contribution is within min/max bounds."""
         self._contribution = max(min(value, self.max_contribution), self.min_contribution)
 
-    def _update_values(self):
-
-        children = self.sub_units
-        if len(children) < 1:
-            return 
-        
-        total_revenue = 0
-        total_margin = 0
-        volatilities = 0
-
-        # Taking a weighted average for the level based on contribution ammounts
-        for child in children:
-            total_revenue += child.contribution  * child.revenue
-            total_margin +=  child.contribution * child.margin
-
-            if child.volatility is not None and child.volatility != 0:
-                volatilities += child.contribution * child.volatility
-
-        self.revenue = total_revenue
-        self.volatility = volatilities
-        self.margin = total_margin
-        self.margin_dollars = self.revenue * self.margin
-
-
-
     def add_sub_unit(self, sub_unit: "Unit"):
         """Adds a sub-unit to this unit."""
         self.sub_units.append(sub_unit)
@@ -74,29 +58,25 @@ class Unit:
         """Removes all sub-units."""
         self.sub_units.clear()
 
-    def compute_totals(self):
-        """Recursively calculate totals for the unit and its sub-units."""
-        if self.sub_units:
-            self.revenue = sum(sub.compute_totals() for sub in self.sub_units)
-        return self.revenue or 0  # Ensure the function always returns a valid value
 
-    def copy(self) -> "Unit":
-        """Creates a deep copy of the unit and its sub-units without recalculating values."""
-        new_unit = Unit.__new__(Unit)
+    def _update_values(self):
+        """Recursively update revenue, margin, and volatility."""
+        if not self.sub_units:
+            return
+
+        total_revenue, total_margin, volatilities = 0, 0, 0
+
+        for child in self.sub_units:
+
+            total_revenue += child.contribution * child.revenue
+            total_margin += child.contribution * child.margin
+
+            if child.volatility is not None and child.volatility != 0:
+                volatilities += child.contribution * child.volatility
+
+        self.revenue = total_revenue
+        self.margin = total_margin
+        self.volatility = volatilities
+        self.margin_dollars = self.revenue * self.margin
+
     
-        # Manually copy over attributes
-        new_unit.name = self.name
-        new_unit.revenue = self.revenue
-        new_unit.margin = self.margin
-        new_unit.min_trend = self.min_trend
-        new_unit.max_trend = self.max_trend
-        new_unit.max_contribution = self.max_contribution
-        new_unit.min_contribution = self.min_contribution
-        new_unit._contribution = self._contribution  # copy the internal contribution value
-        new_unit.margin_dollars = self.margin_dollars
-        new_unit.volatility = self.volatility
-        
-        # Deep copy of sub-units
-        new_unit.sub_units = [child.copy() for child in self.sub_units]
-        
-        return new_unit

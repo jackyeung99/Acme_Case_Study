@@ -65,7 +65,7 @@ Acme = {
                                                 'Unit': Unit(name = 'Killian',min_contribution=.08,  max_contribution=.13),
                                                 'Children': [
                                                         {
-                                                        'Unit': Unit(name = 'Male Perfume', revenue=1.2, margin=.42, min_trend=.4, max_trend=.8, min_contribution=.03, max_contribution=.15),
+                                                        'Unit': Unit(name = 'Male Perfume', revenue=1.2, margin=.42, min_trend=.4, max_trend=.6, min_contribution=.03, max_contribution=.15),
                                                         'Children': []
                                                         },
                                                         {
@@ -79,7 +79,7 @@ Acme = {
                                                 'Unit': Unit(name = 'Frederic Malle',min_contribution=.03, max_contribution=.20, min_trend=-.03, max_trend=.04),
                                                 'Children': [
                                                         {
-                                                        'Unit': Unit(name = 'Male Perfume', revenue=1, margin=.38, min_trend=.5, max_trend=.9, min_contribution=.01, max_contribution=.10),
+                                                        'Unit': Unit(name = 'Male Perfume', revenue=1, margin=.38, min_trend=-.2, max_trend=.2, min_contribution=.01, max_contribution=.10),
                                                         'Children': []
                                                         },
                                                         {
@@ -97,7 +97,7 @@ Acme = {
                                                         'Children': []
                                                         },
                                                         {
-                                                        'Unit': Unit(name = 'Female Perfume', revenue=4.5, margin=.2, min_trend=0, max_trend=.75, min_contribution=0, max_contribution=.03),
+                                                        'Unit': Unit(name = 'Female Perfume', revenue=4.5, margin=.2, min_trend=0, max_trend=.22, min_contribution=0, max_contribution=.03),
                                                         'Children': []
                                                         }
                                         

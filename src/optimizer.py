@@ -1,88 +1,76 @@
 import numpy as np
 from scipy.optimize import  minimize
-from src.helpers import *
+# from hierarchy_tree import *
 
+class ContributionOptimizer:
+    def __init__(self,):
+        pass
 
+    def standardize(self, arr):
+        """Standardizes an array to zero mean and unit variance."""
+        std_dev = np.std(arr)
+        return (arr - np.mean(arr)) / std_dev if std_dev > 0 else arr
 
-def objective(contributions, children, weights):
-    """
-    Objective function to optimize based on revenue, margin, growth, and volatility.
-    """
-    alpha = weights.get("alpha", 0.5)  # Default values if not provided
-    beta = weights.get("beta", 0.5)
-    gamma = weights.get("gamma", 0.2)
-    delta = weights.get("delta", 0.1)
+    def compute_weighted_objective(self, contributions, children):
+        """Computes the weighted objective function for optimization."""
+        alpha, beta, gamma, delta = (
+            self.weights["alpha"], self.weights["beta"], 
+            self.weights["gamma"], self.weights["delta"]
+        )
 
-    revenues = np.array([child.revenue for child in children], dtype=np.float64)
-    margins = np.array([child.margin for child in children])
-    growth = np.array([child.max_trend - child.min_trend for child in children])  
-    volatilities = np.array([np.abs(child.max_trend - child.min_trend) for child in children])
+        revenues = self.standardize(np.array([child.revenue for child in children], dtype=np.float64))
+        margins = self.standardize(np.array([child.margin for child in children], dtype=np.float64))
+        growth = self.standardize(np.array([child.max_trend-child.min_trend for child in children]))
+        volatilities = self.standardize(np.abs(growth)) 
 
-    # Standardization
-    for arr in [revenues, margins, growth, volatilities]:
-        if np.std(arr) > 0:
-            arr -= np.mean(arr)
-            arr /= np.std(arr)
+        return np.sum(contributions * (alpha * revenues + beta * margins + gamma * growth - delta * volatilities))
 
-    # Weighted Sum
-    weighted_objective = np.sum(
-        contributions * (alpha * revenues + beta * margins + gamma * growth - delta * volatilities)
-    )
+    def objective(self, contributions, children):
+        """Objective function to minimize."""
+        return -self.compute_weighted_objective(contributions, children)
 
-    return -weighted_objective 
+    def optimize_contributions(self, children):
+        """Optimizes contribution percentages based on constraints."""
+        x0 = [child.contribution for child in children]
+        bounds = [(child.min_contribution, child.max_contribution) for child in children]
+        constraint = {'type': 'eq', 'fun': lambda x: np.sum(x) - 1}
 
+        result = minimize(
+            self.objective, x0, args=(children,),
+            constraints=[constraint], bounds=bounds, method='SLSQP'
+        )
 
-def optimize_contributions(children, weights):
-    """
-    Optimizes contribution percentages based on weighted objective and contribution constraints.
-    """
-    x0 = [x.contribution for x in children]
-    bounds = [(child.min_contribution, child.max_contribution) for child in children]
-    constraint = {'type': 'eq', 'fun': lambda x: np.sum(x) - 1}
+        if result.success:
+            return result.x
+        else:
+            print("Warning: Optimization failed, returning initial values")
+            return x0
 
-    # Optimize
-    result = minimize(
-        objective, x0, args=(children, weights),
-        constraints=[constraint], bounds=bounds, method='SLSQP'
-    )
-
-    if result.success:
-        return result.x  # Optimal contributions
-    else:
-        return x0  # Default to initialized values
-
-
-def bottom_up_optimizer(node, weights):
-    """
-    Recursively optimizes contribution percentages in a bottom-up manner.
-    """
-    if not node.sub_units:  
-        return node
-
-    # Recursively optimize children first
-    for child in node.sub_units:
-        bottom_up_optimizer(child, weights)
-
-    children = node.sub_units
-
-    if len(children) == 1:
-        results = [1]
-    else:
-        results = optimize_contributions(children, weights)
-    
-    # Update contributions
-    for child, new_contribution in zip(children, results):
-        child.contribution = new_contribution
-
-    node._update_values()
-    return node
-
-
-
-def eval_optimizer(optimized_contributions):
-    return {
-            'Revenue': optimized_contributions.revenue,
-            'Volatility': optimized_contributions.volatility,
-            'Avg Margin': optimized_contributions.margin,
-            'Profit': optimized_contributions.margin_dollars
+    def optimize(self, hierarchy_tree, weights):
+        """Creates a deep copy of the tree and optimizes it in a bottom-up manner."""
+        self.weights = weights if weights else {
+            "alpha": 0.5, "beta": 0.5, "gamma": 0.2, "delta": 0.1
         }
+
+        def _optimize_recursive(sub_node):
+            """Helper function to recursively optimize the copied tree."""
+            if not sub_node.sub_units:  # Base case: No children
+                return sub_node
+
+            # Optimize children first
+            for child in sub_node.sub_units:
+                _optimize_recursive(child)
+
+            if len(sub_node.sub_units) == 1:
+                contributions = [1]
+            else:
+                contributions = self.optimize_contributions(sub_node.sub_units)
+
+            # Assign new contributions
+            for child, new_contribution in zip(sub_node.sub_units, contributions):
+                child.contribution = new_contribution
+
+            sub_node._update_values() 
+            return sub_node
+
+        return _optimize_recursive(hierarchy_tree)  
