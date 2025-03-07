@@ -28,7 +28,7 @@ def run_simulations(weights, years, parameters=None, n=20):
     }
 
 
-def run_all_simulations(strategies, years, parameters):
+def run_all_simulations(strategies, years, parameters, n=20):
     """
     Runs multiple strategies and stores results over different years.
 
@@ -46,7 +46,7 @@ def run_all_simulations(strategies, years, parameters):
         revenue = []
         margin = []
         for step in range(1, years*INTERVAL+1):
-            result = run_simulations(weights, step, parameters)
+            result = run_simulations(weights, step, parameters, n)
             revenue.append(result['revenue'])
             margin.append(result['margin'])
 

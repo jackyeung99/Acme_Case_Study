@@ -61,7 +61,7 @@ class HierarchyTree:
             root = self.root
         return {
             'Revenue': root.revenue,
-            'Volatility': root.volatility,
+            # 'Volatility': root.volatility,
             'Avg Margin': root.margin,
             'Profit': root.margin_dollars
         }
@@ -236,7 +236,7 @@ class HierarchyTree:
                 node_size=10000, cmap=plt.cm.Blues, 
                 edge_color="gray", font_size=12)
 
-        plt.title("Company Hierarchy Visualization with Financial Details", fontsize=25)
+        plt.title("Company Hierarchy Visualization with Financial Details", fontsize=35)
         plt.show()
 
     def to_dataframe(self):
